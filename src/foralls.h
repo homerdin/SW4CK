@@ -18,4 +18,9 @@ void promo_version();
 
 #endif
 
+#if defined(ENABLE_SYCL)
+#include <sycl.hpp>
+#include "sycl_foralls.h"
+#endif
+
 #endif

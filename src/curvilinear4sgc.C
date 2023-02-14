@@ -8,7 +8,7 @@
 #include "hip/hip_runtime.h"
 #include "hip/hip_runtime_api.h"
 #endif
-template <typename T>
+/*template <typename T>
 __device__ __forceinline__ T load(const T& ref) {
   return __builtin_nontemporal_load(&ref);
 }
@@ -16,11 +16,16 @@ template <typename T>
 __device__ __forceinline__ void store(const T value, T& ref) {
   return __builtin_nontemporal_store(value, &ref);
 }
+*/
 #define float_sw4 double
 #define SW4_MARK_FUNCTION
 #define SW4_MARK_BEGIN(arg)
 #define SW4_MARK_END(arg)
+#ifndef ENABLE_SYCL
 #define RAJA_DEVICE __device__
+#else
+#define RAJA_DEVICE 
+#endif
 #include "foralls.h"
 //#include "policies.h"
 #ifndef NO_RAJA
@@ -184,10 +189,14 @@ void curvilinear4sg_ci(
 #if defined(NO_RAJA)
       // LOOP -1
       // 32,4,2 is 4% slower. 32 4 4 does not fit
-#ifdef ENABLE_CUDA
+#if defined(ENABLE_CUDA)
       Range<16> I(ifirst + 2, ilast - 1);
       Range<4> J(jfirst + 2, jlast - 1);
       Range<3> K(1, 6 + 1);  // This was 6
+#elif defined(ENABLE_SYCL)
+      Range<64> I(ifirst + 2, ilast - 1);
+      Range<2> J(jfirst + 2, jlast - 1);
+      Range<2> K(1, 6 + 1);  // This was 6
 #else
       Range<64> I(ifirst + 2, ilast - 1);
       Range<2> J(jfirst + 2, jlast - 1);
@@ -894,7 +903,7 @@ void curvilinear4sg_ci(
 #endif
 
       });  // End of curvilinear4sg_ci LOOP -1
-      insertEvent(stop0);
+//      insertEvent(stop0);
       std::cout << "Kernel 1 time " << timeEvent(start0, stop0) << "\n";
     }
 #ifdef PEEKS_GALORE
@@ -1381,7 +1390,7 @@ void curvilinear4sg_ci(
 #endif
 
         });  // END OF LOOP 0
-    insertEvent(stop1);
+//    insertEvent(stop1);
     std::cout << "Kernel 2 time " << timeEvent(start1, stop1) << "\n";
 
 #ifdef PEEKS_GALORE
@@ -1835,7 +1844,7 @@ void curvilinear4sg_ci(
 #endif
 
         });  // END OF LOOP 1
-    insertEvent(stop2);
+//    insertEvent(stop2);
     std::cout << "Kernel 3 time " << timeEvent(start2, stop2) << "\n";
 
 #ifdef PEEKS_GALORE
@@ -2286,7 +2295,7 @@ void curvilinear4sg_ci(
 #endif
 
         });  // End of curvilinear4sg_ci LOOP 2
-    insertEvent(stop3);
+//    insertEvent(stop3);
     std::cout << "Kernel 4 time " << timeEvent(start3, stop3) << "\n";
   }
 #ifdef PEEKS_GALORE
@@ -2310,7 +2319,11 @@ void curvilinear4sg_ci(
 #if defined(NO_RAJA)
     // LOOP -1
     // 32,4,2 is 4% slower. 32 4 4 does not fit
-#ifdef ENABLE_CUDA
+#if defined(ENABLE_CUDA)
+    Range<16> II(ifirst + 2, ilast - 1);
+    Range<4> JJ(jfirst + 2, jlast - 1);
+    Range<6> KK(nk - 5, nk + 1);  // THIS WAS 6
+#elif defined(ENABLE_SYCL)
     Range<16> II(ifirst + 2, ilast - 1);
     Range<4> JJ(jfirst + 2, jlast - 1);
     Range<6> KK(nk - 5, nk + 1);  // THIS WAS 6
@@ -2993,7 +3006,7 @@ void curvilinear4sg_ci(
 #endif
 
         });
-    insertEvent(stop4);
+//    insertEvent(stop4);
     std::cout << "Kernel 5 time " << timeEvent(start4, stop4) << "\n";
   }
   SW4_MARK_END("CURVI::cuvilinear4sgc");

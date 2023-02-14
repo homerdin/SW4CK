@@ -41,3 +41,22 @@ float timeEvent(cudaEvent_t &start, cudaEvent_t &stop) {
   return ms;
 }
 #endif
+#ifdef ENABLE_SYCL
+#include <sycl.hpp>
+extern sycl::event currentEvent;
+sycl::event newEvent() {
+  return sycl::event();
+}
+
+void insertEvent(sycl::event &event) {
+  currentEvent = event;
+}
+
+float timeEvent(sycl::event &event, sycl::event &e2) {
+  auto end = currentEvent.get_profiling_info<sycl::info::event_profiling::command_end>();
+  auto start = currentEvent.get_profiling_info<sycl::info::event_profiling::command_start>();
+
+  return (end-start)/1.0e6;
+}
+
+#endif

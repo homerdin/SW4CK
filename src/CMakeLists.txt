@@ -40,3 +40,6 @@ if (ENABLE_HIP)
     set(CMAKE_EXE_LINKER_FLAGS  "--amdgpu-target=gfx908 -fgpu-rdc" )
 endif()
 
+if (ENABLE_SYCL)
+        blt_add_target_compile_flags(TO sw4ck FLAGS -DENABLE_SYCL=1 -fsycl)
+endif()

@@ -22,6 +22,11 @@
 #ifdef ENABLE_CUDA
 #include <cuda_profiler_api.h>
 #endif
+#ifdef ENABLE_SYCL
+#include <sycl.hpp>
+sycl::event currentEvent;
+sycl::queue* qu;
+#endif
 #ifdef ENABLE_CUDA
 void CheckError(cudaError_t const err, const char *file, char const *const fun,
                 const int line);
@@ -84,6 +89,15 @@ std::string Sarray::fill(std::istringstream& iss) {
     abort();
   }
 #endif
+#ifdef ENABLE_SYCL
+  sycl::property_list propList{sycl::property::queue::enable_profiling()};
+  qu = new sycl::queue(propList);
+  try {
+    ptr = sycl::malloc_shared<double>(size, *qu);
+  } catch (sycl::exception const& e) {
+    std::cerr << e.what();
+  }
+#endif
 
 #ifdef VERBOSE
   std::cout << "Allocated " << m_nc * m_ni * m_nj * m_nk * sizeof(double)
@@ -96,7 +110,7 @@ std::string Sarray::fill(std::istringstream& iss) {
 void Sarray::init() {
   double* lm_data = m_data;
   forallasync(0, size / 8,
-              [=] __device__(int i) { lm_data[i] = sin(double(i)); });
+              [=] (int i) { lm_data[i] = sin(double(i)); });
 }
 
 void Sarray::init2() {
@@ -114,8 +128,9 @@ void Sarray::init2() {
   double *data = m_data;
   
  
-  forall3asyncnotimer(
-	       I, J, K, [=] __device__(int i, int j, int k) {
+  //forall3asyncnotimer(
+  forall3async<111>(
+	       I, J, K, [=] (int i, int j, int k) {
 		 for (int c=0;c<nc;c++){
 		   
 		   int indx = c + i * offi + j * offj +
@@ -207,6 +222,9 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_HIP
   hipStreamSynchronize(0);
 #endif
+#ifdef ENABLE_SYCL
+  qu->wait();
+#endif
 
 #ifdef VERBOSE
   std::cout << "Done with map array output\n";
@@ -227,6 +245,15 @@ int main(int argc, char* argv[]) {
     abort();
   }
 #endif
+#ifdef ENABLE_SYCL
+  try {
+    ptr = sycl::malloc_shared<double>((6 + 384 + 24 + 48 + 6 + 384 + 6 + 6), *qu);
+//    qu->memset(ptr, 0, (6 + 384 + 24 + 48 + 6 + 384 + 6 + 6));
+  } catch (sycl::exception const& e) {
+    std::cerr << e.what();
+  }
+#endif
+
 
   double *m_sbop, *m_acof, *m_bop, *m_bope, *m_ghcof, *m_acof_no_gp,
       *m_ghcof_no_gp;
@@ -241,7 +268,7 @@ int main(int argc, char* argv[]) {
 
   // std::cout << "Init the cof arrays\n";
   forallasync(0, (6 + 384 + 24 + 48 + 6 + 384 + 6 + 6),
-              [=] __device__(int i) { m_sbop[i] = i / 1000.0; });
+              [=] (int i) { m_sbop[i] = i / 1000.0; });
   // std::cout << "Done\n";
 
   for (int i = 1; i < 2; i++) {  // 0 has the smaller datatset
@@ -264,10 +291,18 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_HIP
     hipMalloc(&ptr, size * sizeof(double));
 #endif
+#ifdef ENABLE_SYCL
+  try {
+    ptr = sycl::malloc_shared<double>(size, *qu);
+//    qu->memset(ptr, 0, size);
+  } catch (sycl::exception const& e) {
+    std::cerr << e.what();
+  }
+#endif
 
     double* m_sg_str_x = (double*)ptr;
     double* m_sg_str_y = m_sg_str_x + optr[7] - optr[6] + 1;
-    forallasync(0, size, [=] __device__(int i) { m_sg_str_x[i] = i / 1000.0; });
+    forallasync(0, size, [=] (int i) { m_sg_str_x[i] = i / 1000.0; });
     // std::cout << "Done initilizing m_sg_str_x and y\n" << std::flush;
 #ifdef ENABLE_CUDA
     cudaProfilerStart();
@@ -294,6 +329,11 @@ CheckDeviceError(cudaStreamSynchronize(0));
     // cudaProfilerStop();
     hipFree(ptr);
 #endif
+#ifdef ENABLE_SYCL
+    qu->wait();
+    sycl::free(ptr, *qu);
+#endif
+
     auto stop = std::chrono::high_resolution_clock::now();
     std::cout<<"\nTotal kernel runtime = "<<std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count()<<" milliseconds ("<<std::chrono::duration_cast<std::chrono::microseconds>(stop-start).count()<<" us ) \n\n";
     auto  minmax =arrays[i]["a_Uacc"]->minmax();
@@ -322,12 +362,15 @@ void promo_version(){
 #endif
 #elif ENABLE_CUDA
   s<<"CUDA("<<CUDA_VERSION<<")\n";
+#elif ENABLE_SYCL
+  s<<"SYCL("<<SYCL_LANGUAGE_VERSION<<")\n";
 #else
   s<<"Unknown programming model\n";
 #endif
 #ifndef NO_RAJA
-s<<"RAJA("<<RAJA_VERSION_MAJOR<<"."<<RAJA_VERSION_MINOR<<"."<<RAJA_VERSION_PATCHLEVEL<<")\n";
+  s<<"RAJA("<<RAJA_VERSION_MAJOR<<"."<<RAJA_VERSION_MINOR<<"."<<RAJA_VERSION_PATCHLEVEL<<")\n";
 #endif
+
 s<<"\n";
 std::cout<<s.str();
   
